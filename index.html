@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自然科教室互動座位表神器</title>
+<style>
+  body { 
+    font-family: "Microsoft JhengHei", sans-serif; 
+    text-align: center; 
+    background-color: #f4f6f9; 
+    margin: 0; 
+    padding: 0;
+  }
+  /* 導覽列設計 */
+  .navbar {
+    background-color: #34495e;
+    padding: 15px 0;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-btn {
+    background-color: transparent;
+    color: white;
+    border: 2px solid transparent;
+    padding: 8px 16px;
+    margin: 0 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: 0.3s;
+  }
+  .nav-btn:hover { background-color: rgba(255,255,255,0.1); }
+  .nav-btn.active { border-color: #3498db; background-color: #2980b9; }
+  
+  /* 教室佈景 */
+  h2 { color: #2c3e50; margin-top: 20px; }
+  .blackboard { 
+    background-color: #2c3e50; color: white; width: 60%; 
+    margin: 10px auto 30px auto; padding: 12px; border-radius: 8px; 
+    font-weight: bold; letter-spacing: 5px; font-size: 1.2em;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+  }
+  .row { display: flex; justify-content: center; gap: 30px; margin-bottom: 40px; }
+  .back-row { gap: 80px; }
+  
+  /* 座位網格設計 */
+  .table-group { 
+    background-color: white; border: 2px solid #34495e; border-radius: 10px; 
+    padding: 15px; width: 250px; box-shadow: 3px 3px 10px rgba(0,0,0,0.08); 
+  }
+  .table-title { 
+    font-weight: bold; font-size: 1.2em; margin-bottom: 10px; 
+    color: #e74c3c; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; 
+  }
+  .seat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  
+  /* 單一座位卡片 */
+  .seat { 
+    padding: 10px 5px; border-radius: 5px; font-weight: bold; 
+    border: 2px dashed #bdc3c7; height: 42px; 
+    display: flex; align-items: center; justify-content: center;
+    cursor: grab; transition: transform 0.2s, box-shadow 0.2s;
+    user-select: none;
+  }
+  .seat:active { cursor: grabbing; transform: scale(0.95); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+  .seat.drag-over { border: 2px solid #e74c3c; background-color: #fff3e0; }
+  
+  /* 顏色設定 */
+  .boy { background-color: #e3f2fd; color: #1565c0; border-color: #90caf9;}
+  .girl { background-color: #fce4ec; color: #c2185b; border-color: #f48fb1;}
+  .empty { background-color: #f8f9fa; color: #ced4da; border-color: #e9ecef; }
+  
+  /* 姓名編輯區 */
+  .edit-text {
+    width: 100%; outline: none; line-height: 1.3;
+  }
+  .edit-text:focus {
+    background-color: rgba(255,255,255,0.7);
+    border-radius: 3px;
+  }
+  
+  /* 提示文字 */
+  .hint { color: #7f8c8d; font-size: 14px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+  <div class="navbar" id="navbar">
+    <button class="nav-btn active" onclick="switchClass('601')">601班</button>
+    <button class="nav-btn" onclick="switchClass('602')">602班</button>
+    <button class="nav-btn" onclick="switchClass('603')">603班</button>
+    <button class="nav-btn" onclick="switchClass('604')">604班</button>
+    <button class="nav-btn" onclick="switchClass('605')">605班</button>
+    <button class="nav-btn" onclick="switchClass('606')">606班</button>
+    <button class="nav-btn" onclick="switchClass('607')">607班</button>
+  </div>
+
+  <h2 id="class-title">601 自然教室座位表</h2>
+  <div class="hint">💡 提示：按住座位可「拖曳交換」 / 在格子上「連點兩下」切換男女顏色 / 點擊文字可直接編輯</div>
+  
+  <div class="blackboard">講 台</div>
+
+  <div id="seat-container"></div>
+
+<script>
+  // 601 到 607 的完美初始座位數據
+  // E:空位, B:男生, G:女生
+  const classData = {
+    "601": [
+      ["E", "G,15,邱沐恩", "G,25,曾緗婕", "B,14,唐熙遠", "B,7,江捷綸", "G,19,呂若慈"], // 3組
+      ["E", "B,6,蕭昱愷", "B,4,李尚謙", "G,18,黃允甯", "G,23,魏奕欣", "B,1,陳德瀚"],   // 2組
+      ["E", "B,2,沈書楷", "B,10,黃浚滐", "G,24,呂安淇", "G,16,耿梓薰", "B,5,張禹皓"],   // 1組
+      ["B,9,邱冠程", "G,17,賴孜欣", "G,20,許苡榕", "B,12,張民祺", "B,13,李威達", "G,27,黃喬瑀"], // 5組
+      ["G,26,卓婷俞", "B,3,梁睿群", "B,11,葉佳翰", "G,21,趙芸", "G,22,王芊云", "B,8,李宇宸"]    // 4組
+    ],
+    "602": [
+      ["E", "B,1,羅少廷", "G,23,簡彤紜", "G,22,謝宜軒", "B,10,唐安禹", "B,4,廖文辰"],
+      ["E", "G,27,呂欣樺", "B,5,李慶宏", "B,15,馬昕", "G,20,張欣雁", "G,24,伍庭萱"],
+      ["E", "B,2,陳羿志", "G,21,顏婕妮", "G,26,陳葦庭", "B,8,林暐宸", "B,9,林暐庭"],
+      ["E", "B,3,張宇翔", "G,19,陳靖瑤", "G,16,張庭榛", "B,11,林祐廷", "B,6,吳家澔"],
+      ["G,18,許宥心", "B,13,徐雋茗", "B,12,王墨程", "G,25,袁莙甯", "G,17,陳羽熙", "B,7,朱玉成"]
+    ],
+    "603": [
+      ["E", "B,7,何宥寬", "B,13,魏郁霖", "G,18,朱芊霓", "G,16,陳婷儀", "B,9,楊昱珩"],
+      ["E", "B,27,陳禹喆", "B,12,陳錦翔", "G,19,朱詠暄", "G,25,鍾淇郁", "B,4,李宥霆"],
+      ["E", "G,24,邱暄耘", "G,15,姜穎瑄", "B,6,高萸薳", "B,11,邱騰", "G,20,郭靜慧"],
+      ["E", "B,1,吳彥霆", "B,3,李帛謙", "G,17,王亦筑", "G,22,姚品妘", "B,2,向詣杰"],
+      ["B,8,劉騏樂", "G,26,賴宜均", "G,23,楊宜樺", "B,10,陳星睿", "B,5,朱宥隆", "G,21,吳紫葳"]
+    ],
+    "604": [
+      ["E", "B,8,許宥俊", "B,4,王宸宇", "G,23,吳軒甄", "G,26,劉芷妍", "G,18,林胤妃"],
+      ["E", "B,9,邱懿帷", "B,2,張家源", "G,22,林婧菡", "G,24,許惠筑", "B,7,李以勒"],
+      ["E", "G,16,陳思葛", "G,14,高平潔", "B,12,廖為熙", "B,1,陳品諺", "G,17,趙子妍"],
+      ["E", "E", "B,5,莊承焌", "G,15,鍾予倢", "G,20,鄭伃睎", "B,10,楊室恩"],
+      ["E", "B,13,彭子銓", "B,6,江子樵", "G,21,江昕寰", "G,19,薛鈺玄", "G,25,張云蓁"]
+    ],
+    "605": [
+      ["E", "B,5,劉容維", "B,13,陳立皓", "G,25,曾苡瑄", "G,18,段心芸", "B,9,陳順詮"],
+      ["E", "B,14,鄭祐侖", "B,8,吳宥霆", "G,24,陳昀庭", "G,20,陳庭萱", "B,3,宋宏彧"],
+      ["E", "B,6,李杰祐", "B,15,徐以庭", "G,17,張葦庭", "G,19,劉芊璇", "B,10,高靖傑"],
+      ["B,1,陳星宇", "G,16,黃采彤", "G,21,何倢瑄", "B,4,謝禹祥", "B,12,何豫昕", "G,26,劉蕎儀"],
+      ["B,11,曾宇豪", "G,27,曹瑀桐", "G,23,邱子芯", "B,2,温雨宬", "B,7,黃世瑋", "G,22,吳沁蔓"]
+    ],
+    "606": [
+      ["B,13,蔡閔羿", "G,24,莊惟晴", "G,28,黃詩涵", "B,10,羅啓睿", "B,3,游曜誠", "G,21,簡妤晴"], // 606的3組是6人滿編
+      ["E", "G,20,楊姵嬌", "B,7,秦若桓", "B,11,吳宸緯", "G,18,陳可芯", "G,25,林沛辰"],
+      ["E", "B,5,徐霆恩", "G,19,林芯亘", "G,16,施可芯", "B,9,許皓崴", "B,4,張凱傑"],
+      ["B,1,彭宇揚", "G,23,歐芮宸", "G,27,邱芸凡", "B,14,范綱宇", "B,2,黃元和", "G,22,吳靜萱"],
+      ["B,12,廖芃凱", "G,15,陳婷宇", "G,17,陳宣儒", "B,6,馬柏森", "B,8,何佳叡", "G,26,何梓圻"]
+    ],
+    "607": [
+      ["E", "B,5,游承叡", "G,18,陳妍蓉", "G,22,尤若穎", "B,9,吳秉勳", "G,27,王秀芳"],
+      ["E", "B,2,王弘毅", "G,19,林芷伃", "G,23,蔡宇晴", "B,7,詹丞恩", "B,10,蔡明熙"],
+      ["E", "G,25,白芷瑄", "B,1,黃楷倫", "B,4,呂宸羽", "G,20,龔湘婷", "G,28,李曉蓁"],
+      ["B,12,許睿宸", "G,21,徐常恩", "G,16,風佳璇", "B,13,周宸緯", "B,11,谷書緯", "G,17,柏妧蓁"],
+      ["B,8,游雨鴻", "G,14,張安緹", "G,15,劉芯芸", "B,3,陳憲騰", "B,6,黃靖壬", "G,24,鐘沛涵"]
+    ]
+  };
+
+  const groupTitles = ["第三組", "第二組", "第一組", "第五組", "第四組"];
+
+  // 渲染班級
+  function renderClass(classId) {
+    document.getElementById('class-title').innerText = `${classId} 自然教室座位表`;
+    const container = document.getElementById('seat-container');
+    container.innerHTML = '';
+    const groups = classData[classId];
+
+    // 前排 (3組, 2組, 1組)
+    let frontRow = document.createElement('div');
+    frontRow.className = 'row';
+    for(let i = 0; i < 3; i++) {
+      frontRow.appendChild(createGroupNode(groupTitles[i], groups[i]));
+    }
+    container.appendChild(frontRow);
+
+    // 後排 (5組, 4組)
+    let backRow = document.createElement('div');
+    backRow.className = 'row back-row';
+    for(let i = 3; i < 5; i++) {
+      backRow.appendChild(createGroupNode(groupTitles[i], groups[i]));
+    }
+    container.appendChild(backRow);
+
+    // 重新綁定事件
+    attachDragAndDropEvents();
+    attachEditEvents();
+  }
+
+  // 創建小組 DOM
+  function createGroupNode(title, seats) {
+    let groupDiv = document.createElement('div');
+    groupDiv.className = 'table-group';
+
+    let count = seats.filter(s => s !== 'E').length;
+    let titleDiv = document.createElement('div');
+    titleDiv.className = 'table-title';
+    titleDiv.innerText = `${title} (${count}人)`;
+    groupDiv.appendChild(titleDiv);
+
+    let gridDiv = document.createElement('div');
+    gridDiv.className = 'seat-grid';
+
+    seats.forEach(seatData => {
+      let seatDiv = document.createElement('div');
+      seatDiv.className = 'seat';
+      seatDiv.setAttribute('draggable', 'true'); // 允許拖曳
+
+      // 雙擊切換性別顏色
+      seatDiv.addEventListener('dblclick', toggleGender);
+
+      let innerSpan = document.createElement('span');
+      innerSpan.className = 'edit-text';
+      innerSpan.setAttribute('contenteditable', 'true'); // 允許文字編輯
+
+      if (seatData === 'E') {
+        seatDiv.classList.add('empty');
+        innerSpan.innerHTML = `(空位)`;
+      } else {
+        let parts = seatData.split(',');
+        let type = parts[0] === 'B' ? 'boy' : 'girl';
+        let genderText = parts[0] === 'B' ? '男' : '女';
+        seatDiv.classList.add(type);
+        innerSpan.innerHTML = `${genderText} ${parts[1]}號<br>${parts[2]}`;
+      }
+      
+      seatDiv.appendChild(innerSpan);
+      gridDiv.appendChild(seatDiv);
+    });
+
+    groupDiv.appendChild(gridDiv);
+    return groupDiv;
+  }
+
+  // 切換班級按鈕邏輯
+  function switchClass(classId) {
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    renderClass(classId);
+  }
+
+  // ---- 核心邏輯：性別切換 (雙擊) ----
+  function toggleGender(e) {
+    let seat = e.currentTarget;
+    let span = seat.querySelector('.edit-text');
+
+    if (seat.classList.contains('boy')) {
+      seat.classList.replace('boy', 'girl');
+      span.innerHTML = span.innerHTML.replace(/^男/, '女');
+    } else if (seat.classList.contains('girl')) {
+      seat.classList.replace('girl', 'empty');
+      span.innerHTML = '(空位)';
+    } else {
+      seat.classList.replace('empty', 'boy');
+      if (span.innerText === '(空位)') span.innerHTML = '男 X號<br>姓名';
+    }
+    updateGroupCount(seat);
+  }
+
+  // 自動更新該組人數顯示
+  function updateGroupCount(seatEl) {
+    let group = seatEl.closest('.table-group');
+    let titleEl = group.querySelector('.table-title');
+    let baseTitle = titleEl.innerText.split(' ')[0];
+    let count = group.querySelectorAll('.boy, .girl').length;
+    titleEl.innerText = `${baseTitle} (${count}人)`;
+  }
+
+  // ---- 核心邏輯：編輯文字防衝突 ----
+  function attachEditEvents() {
+    document.querySelectorAll('.edit-text').forEach(span => {
+      // 點擊編輯文字時，暫時關閉母層的拖曳功能，以免打字不順暢
+      span.addEventListener('focus', function() {
+        this.parentElement.setAttribute('draggable', 'false');
+      });
+      span.addEventListener('blur', function() {
+        this.parentElement.setAttribute('draggable', 'true');
+      });
+    });
+  }
+
+  // ---- 核心邏輯：拖曳換座位 ----
+  let draggedSeat = null;
+
+  function attachDragAndDropEvents() {
+    document.querySelectorAll('.seat').forEach(seat => {
+      seat.addEventListener('dragstart', function(e) {
+        draggedSeat = this;
+        e.dataTransfer.effectAllowed = 'move';
+        this.style.opacity = '0.5';
+      });
+      
+      seat.addEventListener('dragend', function() {
+        this.style.opacity = '1';
+        document.querySelectorAll('.seat').forEach(s => s.classList.remove('drag-over'));
+      });
+
+      seat.addEventListener('dragover', function(e) {
+        e.preventDefault(); // 允許放下
+        this.classList.add('drag-over');
+      });
+
+      seat.addEventListener('dragleave', function() {
+        this.classList.remove('drag-over');
+      });
+
+      seat.addEventListener('drop', function(e) {
+        e.stopPropagation();
+        this.classList.remove('drag-over');
+        
+        if (draggedSeat !== this) {
+          // 交換 HTML (文字內容)
+          let tempHTML = this.innerHTML;
+          this.innerHTML = draggedSeat.innerHTML;
+          draggedSeat.innerHTML = tempHTML;
+
+          // 交換 Class (背景顏色設定)
+          let tempClass = this.className;
+          this.className = draggedSeat.className;
+          draggedSeat.className = tempClass;
+
+          // 重新綁定編輯事件(因為 span 被抽換了)
+          attachEditEvents();
+          updateGroupCount(this);
+          updateGroupCount(draggedSeat);
+        }
+        return false;
+      });
+    });
+  }
+
+  // 初始化預設顯示 601 班
+  window.onload = () => renderClass('601');
+</script>
+
+</body>
+</html>
