@@ -36,8 +36,18 @@
   .nav-btn:hover { background-color: rgba(255,255,255,0.1); }
   .nav-btn.active { border-color: #3498db; background-color: #2980b9; }
   
+  /* 標題與還原按鈕 */
+  .header-container {
+    display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 20px;
+  }
+  h2 { color: #2c3e50; margin: 0; }
+  .reset-btn {
+    background-color: #e74c3c; color: white; border: none; padding: 8px 15px;
+    border-radius: 5px; font-weight: bold; cursor: pointer; transition: 0.2s;
+  }
+  .reset-btn:hover { background-color: #c0392b; }
+
   /* 教室佈景 */
-  h2 { color: #2c3e50; margin-top: 20px; }
   .blackboard { 
     background-color: #2c3e50; color: white; width: 60%; 
     margin: 10px auto 30px auto; padding: 12px; border-radius: 8px; 
@@ -84,7 +94,7 @@
   }
   
   /* 提示文字 */
-  .hint { color: #7f8c8d; font-size: 14px; margin-bottom: 20px; }
+  .hint { color: #7f8c8d; font-size: 14px; margin-bottom: 20px; margin-top: 10px;}
 </style>
 </head>
 <body>
@@ -99,17 +109,21 @@
     <button class="nav-btn" onclick="switchClass('607')">607班</button>
   </div>
 
-  <h2 id="class-title">601 自然教室座位表</h2>
-  <div class="hint">💡 提示：按住座位可「拖曳交換」 / 在格子上「連點兩下」切換男女顏色 / 點擊文字可直接編輯</div>
+  <div class="header-container">
+    <h2 id="class-title">601 自然教室座位表</h2>
+    <button class="reset-btn" onclick="resetToDefault()">🔄 還原預設座位</button>
+  </div>
+  <div class="hint">💡 提示：按住座位可「拖曳」 / 連點兩下切換男女 / 點擊文字直接編輯。<b>系統已開啟自動存檔！</b></div>
   
   <div class="blackboard">講 台</div>
 
   <div id="seat-container"></div>
 
 <script>
-  // 601 到 607 的完美初始座位數據
-  // E:空位, B:男生, G:女生
-  const classData = {
+  let currentClass = '601'; // 紀錄當前班級
+
+  // 601 到 607 的 AI 精算預設名單
+  const defaultClassData = {
     "601": [
       ["E", "G,15,邱沐恩", "G,25,曾緗婕", "B,14,唐熙遠", "B,7,江捷綸", "G,19,呂若慈"], // 3組
       ["E", "B,6,蕭昱愷", "B,4,李尚謙", "G,18,黃允甯", "G,23,魏奕欣", "B,1,陳德瀚"],   // 2組
@@ -146,7 +160,7 @@
       ["B,11,曾宇豪", "G,27,曹瑀桐", "G,23,邱子芯", "B,2,温雨宬", "B,7,黃世瑋", "G,22,吳沁蔓"]
     ],
     "606": [
-      ["B,13,蔡閔羿", "G,24,莊惟晴", "G,28,黃詩涵", "B,10,羅啓睿", "B,3,游曜誠", "G,21,簡妤晴"], // 606的3組是6人滿編
+      ["B,13,蔡閔羿", "G,24,莊惟晴", "G,28,黃詩涵", "B,10,羅啓睿", "B,3,游曜誠", "G,21,簡妤晴"],
       ["E", "G,20,楊姵嬌", "B,7,秦若桓", "B,11,吳宸緯", "G,18,陳可芯", "G,25,林沛辰"],
       ["E", "B,5,徐霆恩", "G,19,林芯亘", "G,16,施可芯", "B,9,許皓崴", "B,4,張凱傑"],
       ["B,1,彭宇揚", "G,23,歐芮宸", "G,27,邱芸凡", "B,14,范綱宇", "B,2,黃元和", "G,22,吳靜萱"],
@@ -163,36 +177,100 @@
 
   const groupTitles = ["第三組", "第二組", "第一組", "第五組", "第四組"];
 
-  // 渲染班級
+  // ---- 核心邏輯：自動存檔 ----
+  function saveState() {
+    const container = document.getElementById('seat-container');
+    let stateData = [];
+    
+    // 遍歷所有小組
+    container.querySelectorAll('.table-group').forEach(group => {
+      let groupSeats = [];
+      // 遍歷組內每一個座位
+      group.querySelectorAll('.seat').forEach(seat => {
+        groupSeats.push({
+          className: seat.className,
+          innerHTML: seat.querySelector('.edit-text').innerHTML
+        });
+      });
+      stateData.push(groupSeats);
+    });
+
+    // 將資料存入瀏覽器的 Local Storage
+    localStorage.setItem(`seats_${currentClass}`, JSON.stringify(stateData));
+  }
+
+  // 渲染班級 (讀取存檔 或 載入預設)
   function renderClass(classId) {
+    currentClass = classId;
     document.getElementById('class-title').innerText = `${classId} 自然教室座位表`;
     const container = document.getElementById('seat-container');
     container.innerHTML = '';
-    const groups = classData[classId];
 
-    // 前排 (3組, 2組, 1組)
+    // 檢查是否有存檔
+    let savedData = localStorage.getItem(`seats_${classId}`);
+    
     let frontRow = document.createElement('div');
     frontRow.className = 'row';
-    for(let i = 0; i < 3; i++) {
-      frontRow.appendChild(createGroupNode(groupTitles[i], groups[i]));
-    }
-    container.appendChild(frontRow);
-
-    // 後排 (5組, 4組)
     let backRow = document.createElement('div');
     backRow.className = 'row back-row';
-    for(let i = 3; i < 5; i++) {
-      backRow.appendChild(createGroupNode(groupTitles[i], groups[i]));
+
+    if (savedData) {
+      // 🌟 有存檔：從存檔還原
+      let parsedData = JSON.parse(savedData);
+      for(let i = 0; i < 3; i++) frontRow.appendChild(createGroupNodeFromSaved(groupTitles[i], parsedData[i]));
+      for(let i = 3; i < 5; i++) backRow.appendChild(createGroupNodeFromSaved(groupTitles[i], parsedData[i]));
+    } else {
+      // 🌟 沒存檔：載入系統預設
+      const groups = defaultClassData[classId];
+      for(let i = 0; i < 3; i++) frontRow.appendChild(createGroupNodeFromDefault(groupTitles[i], groups[i]));
+      for(let i = 3; i < 5; i++) backRow.appendChild(createGroupNodeFromDefault(groupTitles[i], groups[i]));
     }
+
+    container.appendChild(frontRow);
     container.appendChild(backRow);
 
-    // 重新綁定事件
+    // 重新綁定所有互動事件
     attachDragAndDropEvents();
     attachEditEvents();
   }
 
-  // 創建小組 DOM
-  function createGroupNode(title, seats) {
+  // 從「存檔」創建小組節點
+  function createGroupNodeFromSaved(title, seatsData) {
+    let groupDiv = document.createElement('div');
+    groupDiv.className = 'table-group';
+
+    let titleDiv = document.createElement('div');
+    titleDiv.className = 'table-title';
+    groupDiv.appendChild(titleDiv); // 人數稍後計算
+
+    let gridDiv = document.createElement('div');
+    gridDiv.className = 'seat-grid';
+
+    let count = 0;
+    seatsData.forEach(data => {
+      let seatDiv = document.createElement('div');
+      seatDiv.className = data.className;
+      seatDiv.setAttribute('draggable', 'true');
+      seatDiv.addEventListener('dblclick', toggleGender);
+
+      let innerSpan = document.createElement('span');
+      innerSpan.className = 'edit-text';
+      innerSpan.setAttribute('contenteditable', 'true');
+      innerSpan.innerHTML = data.innerHTML;
+      
+      if (!seatDiv.classList.contains('empty')) count++;
+
+      seatDiv.appendChild(innerSpan);
+      gridDiv.appendChild(seatDiv);
+    });
+
+    titleDiv.innerText = `${title} (${count}人)`;
+    groupDiv.appendChild(gridDiv);
+    return groupDiv;
+  }
+
+  // 從「預設字串」創建小組節點
+  function createGroupNodeFromDefault(title, seats) {
     let groupDiv = document.createElement('div');
     groupDiv.className = 'table-group';
 
@@ -208,14 +286,12 @@
     seats.forEach(seatData => {
       let seatDiv = document.createElement('div');
       seatDiv.className = 'seat';
-      seatDiv.setAttribute('draggable', 'true'); // 允許拖曳
-
-      // 雙擊切換性別顏色
+      seatDiv.setAttribute('draggable', 'true');
       seatDiv.addEventListener('dblclick', toggleGender);
 
       let innerSpan = document.createElement('span');
       innerSpan.className = 'edit-text';
-      innerSpan.setAttribute('contenteditable', 'true'); // 允許文字編輯
+      innerSpan.setAttribute('contenteditable', 'true');
 
       if (seatData === 'E') {
         seatDiv.classList.add('empty');
@@ -236,14 +312,22 @@
     return groupDiv;
   }
 
-  // 切換班級按鈕邏輯
+  // 切換班級
   function switchClass(classId) {
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     event.target.classList.add('active');
     renderClass(classId);
   }
 
-  // ---- 核心邏輯：性別切換 (雙擊) ----
+  // 一鍵還原預設座位
+  function resetToDefault() {
+    if(confirm(`確定要將【 ${currentClass} 班】的座位還原成預設嗎？\n(這將清除您手動調整的存檔且無法復原)`)) {
+      localStorage.removeItem(`seats_${currentClass}`); // 刪除存檔
+      renderClass(currentClass); // 重新渲染（就會抓預設資料）
+    }
+  }
+
+  // 性別切換 (雙擊)
   function toggleGender(e) {
     let seat = e.currentTarget;
     let span = seat.querySelector('.edit-text');
@@ -259,9 +343,10 @@
       if (span.innerText === '(空位)') span.innerHTML = '男 X號<br>姓名';
     }
     updateGroupCount(seat);
+    saveState(); // 變更後自動存檔 💾
   }
 
-  // 自動更新該組人數顯示
+  // 更新該組人數
   function updateGroupCount(seatEl) {
     let group = seatEl.closest('.table-group');
     let titleEl = group.querySelector('.table-title');
@@ -270,22 +355,23 @@
     titleEl.innerText = `${baseTitle} (${count}人)`;
   }
 
-  // ---- 核心邏輯：編輯文字防衝突 ----
+  // 編輯文字功能綁定
   function attachEditEvents() {
     document.querySelectorAll('.edit-text').forEach(span => {
-      // 點擊編輯文字時，暫時關閉母層的拖曳功能，以免打字不順暢
+      // 點擊打字時，暫停拖曳功能，避免衝突
       span.addEventListener('focus', function() {
         this.parentElement.setAttribute('draggable', 'false');
       });
+      // 打字結束 (失去焦點) 或內容改變時，恢復拖曳並存檔
       span.addEventListener('blur', function() {
         this.parentElement.setAttribute('draggable', 'true');
+        saveState(); // 變更後自動存檔 💾
       });
     });
   }
 
-  // ---- 核心邏輯：拖曳換座位 ----
+  // 拖曳換座位功能綁定
   let draggedSeat = null;
-
   function attachDragAndDropEvents() {
     document.querySelectorAll('.seat').forEach(seat => {
       seat.addEventListener('dragstart', function(e) {
@@ -300,7 +386,7 @@
       });
 
       seat.addEventListener('dragover', function(e) {
-        e.preventDefault(); // 允許放下
+        e.preventDefault(); 
         this.classList.add('drag-over');
       });
 
@@ -313,20 +399,21 @@
         this.classList.remove('drag-over');
         
         if (draggedSeat !== this) {
-          // 交換 HTML (文字內容)
+          // 交換 HTML
           let tempHTML = this.innerHTML;
           this.innerHTML = draggedSeat.innerHTML;
           draggedSeat.innerHTML = tempHTML;
 
-          // 交換 Class (背景顏色設定)
+          // 交換 Class
           let tempClass = this.className;
           this.className = draggedSeat.className;
           draggedSeat.className = tempClass;
 
-          // 重新綁定編輯事件(因為 span 被抽換了)
           attachEditEvents();
           updateGroupCount(this);
           updateGroupCount(draggedSeat);
+          
+          saveState(); // 拖曳交換後自動存檔 💾
         }
         return false;
       });
